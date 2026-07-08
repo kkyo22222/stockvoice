@@ -29,26 +29,32 @@ jobs:
           pip3 install --user --upgrade buildozer Cython
 
       # ==========================================================
-      # 終極破解：直接在 Buildozer 沙盒內硬塞「全版本相容」的 Android 授權憑證
+      # 終極合體：一氣呵成配置所有路徑、授權，並立刻啟動編譯
       # ==========================================================
-      - name: Force Inject Android SDK Licenses
+      - name: Pre-populate Android SDK and Run Buildozer
         run: |
-          # 1. 預先建立 Buildozer 未來會自動生成的 SDK 授權目錄
+          # 1. 建立 Buildozer 預期的所有新舊 SDK 目錄結構
+          mkdir -p ~/.buildozer/android/platform/android-sdk/cmdline-tools/latest
+          mkdir -p ~/.buildozer/android/platform/android-sdk/tools/bin
           mkdir -p ~/.buildozer/android/platform/android-sdk/licenses
           
-          # 2. 直接把 Android 官方最核心的 5 種授權合約 Hash 值直接寫死進去檔案裡
-          # 這樣不論 Buildozer 下載 build-tools 37 還是 33，通通都會直接放行！
+          # 2. 下載官方最新版的 Android 命令行工具 (提供真正的 sdkmanager)
+          wget https://dl.google.com/android/repository/commandlinetools-linux-9477386_latest.zip -O cmdline-tools.zip
+          unzip -q cmdline-tools.zip
+          
+          # 3. 同時塞滿新舊路徑，這樣它用哪種方式找 sdkmanager 都不可能失敗
+          cp -r cmdline-tools/* ~/.buildozer/android/platform/android-sdk/cmdline-tools/latest/
+          cp ~/.buildozer/android/platform/android-sdk/cmdline-tools/latest/bin/sdkmanager ~/.buildozer/android/platform/android-sdk/tools/bin/sdkmanager
+          chmod +x ~/.buildozer/android/platform/android-sdk/tools/bin/sdkmanager
+          chmod +x ~/.buildozer/android/platform/android-sdk/cmdline-tools/latest/bin/sdkmanager
+
+          # 4. 強制寫入上一關通關的「萬能授權簽名章」
           echo -e "\n8933bad161af4178b1185d1a37fbf41ea5269c55\nd56f5187479451eabf01fb7431302450f3544353\n24333f1a63b6825ea9c5514f83c2829b004d1fee" > ~/.buildozer/android/platform/android-sdk/licenses/android-sdk-license
           echo -e "\n84831b9409646a918e30573bab4c9c91346d8abd" > ~/.buildozer/android/platform/android-sdk/licenses/android-sdk-preview-license
-          echo -e "\n33830a68d85f413340051de1f038f9024c0840b3" > ~/.buildozer/android/platform/android-sdk/licenses/google-tv-license
-          echo -e "\ne911775072043e6b6613012115948506249d44b1" > ~/.buildozer/android/platform/android-sdk/licenses/android-googletv-license
-          echo -e "\n6510125f0c552403d1691afab46effd1e72cbbd9" > ~/.buildozer/android/platform/android-sdk/licenses/android-sdk-arm-dbt-license
           
-          echo "授權文件硬核強植完成！"
-
-      # 執行乾淨編譯
-      - name: Build with Buildozer
-        run: |
+          echo "【路徑與授權實體強灌完成】立刻啟動編譯..."
+          
+          # 5. 在同一個 Process 中原地啟動 Buildozer，不給系統任何重置的空隙
           buildozer -v android debug
 
       - name: Upload APK Artifact
