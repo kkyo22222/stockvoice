@@ -11,6 +11,7 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v3
 
+      # 使用 Java 17，與 GitHub 內建的 Android SDK 版本完美匹配
       - name: Set up JDK 17
         uses: actions/setup-java@v3
         with:
@@ -29,40 +30,30 @@ jobs:
           pip3 install --user --upgrade buildozer Cython
 
       # ==========================================================
-      # 雙重修正：配置路徑，並直接提取系統內建官方 Aidl 確保完全相容
+      # 關鍵核心：將 GitHub 系統內建的完美 SDK/NDK 直接映射給 Buildozer
       # ==========================================================
-      - name: Pre-setup SDK Path Fixes (Aidl & Sdkmanager)
+      - name: Standardize Android SDK/NDK Links
         run: |
-          # 1. 配置 sdkmanager 舊路徑轉址
-          mkdir -p ~/.buildozer/android/platform/android-sdk/cmdline-tools/latest
-          mkdir -p ~/.buildozer/android/platform/android-sdk/tools/bin
+          # 1. 建立 buildozer 的平台目標目錄
+          mkdir -p ~/.buildozer/android/platform/
           
-          wget https://dl.google.com/android/repository/commandlinetools-linux-9477386_latest.zip -O cmdline-tools.zip
-          unzip -q cmdline-tools.zip
-          cp -r cmdline-tools/* ~/.buildozer/android/platform/android-sdk/cmdline-tools/latest/
-          ln -s ~/.buildozer/android/platform/android-sdk/cmdline-tools/latest/bin/sdkmanager ~/.buildozer/android/platform/android-sdk/tools/bin/sdkmanager || true
+          # 2. 直接把系統內建、完全合規可執行的 Android SDK 軟連結過去
+          ln -s /usr/local/lib/android/sdk ~/.buildozer/android/platform/android-sdk
+          
+          # 3. 自動偵測並軟連結系統內建最穩定的 Android NDK 版本
+          SYSTEM_NDK=$(ls -d /usr/local/lib/android/sdk/ndk/* | head -n 1)
+          echo "偵測到系統原生 NDK 位置: $SYSTEM_NDK"
+          ln -s "$SYSTEM_NDK" ~/.buildozer/android/platform/android-ndk
 
-          # 2. 強制建立 37.0.0 build-tools 目錄
-          mkdir -p ~/.buildozer/android/platform/android-sdk/build-tools/37.0.0/
-          
-          # 【關鍵修正】用 Linux find 指令在 GitHub 系統中尋找微軟官方內建、絕對相容的 aidl 執行檔
-          # 並直接將它複製過來，徹底解決 Exec format error
-          SYSTEM_AIDL=$(find /usr/local/lib/android/sdk/build-tools/ -name "aidl" -type f | head -n 1)
-          if [ ! -z "$SYSTEM_AIDL" ]; then
-            echo "找到系統內建官方 Aidl: $SYSTEM_AIDL，正在進行相容性複製..."
-            cp "$SYSTEM_AIDL" ~/.buildozer/android/platform/android-sdk/build-tools/37.0.0/aidl
-          else
-            echo "未找到系統內建 Aidl，啟用後備方案下載..."
-            wget https://github.com/skylot/jadx/raw/master/jadx-cli/txt/templates/linux/bin/aidl -O ~/.buildozer/android/platform/android-sdk/build-tools/37.0.0/aidl || true
-          fi
-          
-          # 賦予執行權限
-          chmod +x ~/.buildozer/android/platform/android-sdk/build-tools/37.0.0/aidl || true
-          
-          echo "sdkmanager 與官方 100% 相容版 aidl 配置完成！"
-
+      # ==========================================================
+      # 執行編譯（帶入環境變數，強迫覆蓋設定）
+      # ==========================================================
       - name: Build with Buildozer
+        env:
+          ANDROID_HOME: /usr/local/lib/android/sdk
+          ANDROID_SDK_ROOT: /usr/local/lib/android/sdk
         run: |
+          # 執行打包
           buildozer -v android debug
 
       - name: Upload APK Artifact
