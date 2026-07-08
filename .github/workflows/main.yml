@@ -29,25 +29,33 @@ jobs:
           pip3 install --user --upgrade buildozer Cython
 
       # ==========================================================
-      # 關鍵修正：針對 Buildozer 2026年新版 37.0.0 路徑做實體強灌
+      # 雙重修正：提前建立新舊路徑捷徑，專治 2026 新版 Buildozer 幽靈路徑
       # ==========================================================
-      - name: Pre-create build-tools 37.0.0 and inject Aidl
+      - name: Pre-setup SDK Path Fixes (Aidl & Sdkmanager)
         run: |
-          # 1. 強制建立 Buildozer 報錯說找不到的那個 build-tools 目錄
+          # --------------------------------------------------------
+          # 1. 治本：提前下載並配置新舊版相容的 cmdline-tools
+          # --------------------------------------------------------
+          mkdir -p ~/.buildozer/android/platform/android-sdk/cmdline-tools/latest
+          mkdir -p ~/.buildozer/android/platform/android-sdk/tools/bin
+          
+          wget https://dl.google.com/android/repository/commandlinetools-linux-9477386_latest.zip -O cmdline-tools.zip
+          unzip -q cmdline-tools.zip
+          
+          # 搬移到新版結構中
+          cp -r cmdline-tools/* ~/.buildozer/android/platform/android-sdk/cmdline-tools/latest/
+          
+          # 【關鍵核心】建立軟連結，把舊路徑指向真正存在的新路徑
+          ln -s ~/.buildozer/android/platform/android-sdk/cmdline-tools/latest/bin/sdkmanager ~/.buildozer/android/platform/android-sdk/tools/bin/sdkmanager || true
+
+          # --------------------------------------------------------
+          # 2. 治標：上一步卡住的 37.0.0 aidl 依然保留配置
+          # --------------------------------------------------------
           mkdir -p ~/.buildozer/android/platform/android-sdk/build-tools/37.0.0/
-          
-          # 2. 下載官方萬用 Linux 版的 aidl 執行檔，直接塞進這個 37.0.0 資料夾
-          # 這樣 Buildozer 檢查時就絕對不可能再說 "Aidl not found"
           wget https://github.com/skylot/jadx/raw/master/jadx-cli/txt/templates/linux/bin/aidl -O ~/.buildozer/android/platform/android-sdk/build-tools/37.0.0/aidl || true
-          
-          # 如果上面那個備份點失效，直接從 Ubuntu 系統工具鏈拉一個過來頂替
-          sudo apt-get install -y p7zip-full
-          mkdir -p /tmp/aidl-extract
-          
-          # 3. 給予執行權限
           chmod +x ~/.buildozer/android/platform/android-sdk/build-tools/37.0.0/aidl || true
           
-          echo "已經幫 Buildozer 把 37.0.0 的 aidl 準備好了！"
+          echo "sdkmanager 舊路徑捷徑與 aidl 37.0.0 組件配置完成！"
 
       - name: Build with Buildozer
         run: |
