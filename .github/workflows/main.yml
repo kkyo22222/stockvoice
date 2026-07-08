@@ -23,48 +23,32 @@ jobs:
           pip3 install --user buildozer
 
       # ==========================================================
-      # 第一階段：引導並強迫 Buildozer 生出它的內部資料夾
+      # 終極大絕：直接在環境變數與沙盒中寫死所有 Android SDK 工具鏈
       # ==========================================================
-      - name: Force Buildozer to initialize SDK
+      - name: Setup Complete Android Environment for Buildozer
         run: |
-          # 讓它跑一下，它一定會失敗卡在 aidl，但這樣它就會把它的 Android SDK 目錄結構生出來
-          buildozer -v android debug || true
+          # 1. 建立 Buildozer 預期的所有核心目錄
+          mkdir -p ~/.buildozer/android/platform/android-sdk/cmdline-tools/latest/bin
+          mkdir -p ~/.buildozer/android/platform/android-sdk/tools/bin
+          mkdir -p ~/.buildozer/android/platform/android-sdk/build-tools/33.0.1/
 
-      # ==========================================================
-      # 終極修正：直接把系統現成的 aidl 硬塞進 Buildozer 的沙盒路徑裡
-      # ==========================================================
-      - name: Hard Inject Aidl & Sdkmanager into Buildozer path
-        run: |
-          # 1. 找出 Buildozer 到底把它的 build-tools 藏在哪裡 (通常是 33.0.1 或其他版本)
-          TARGET_DIR=$(dirname $(find ~/.buildozer/android/platform/ -name "lib" -path "*/build-tools/*" | head -n 1))
-          echo "Target build-tools directory is: $TARGET_DIR"
+          # 2. 直接拿 GitHub 系統現成、完全正常的 Android SDK 工具進行強力覆蓋
+          # 這能保證 aidl 和 sdkmanager 絕對存在且可執行
+          sudo cp /usr/local/lib/android/sdk/build-tools/33.0.1/aidl ~/.buildozer/android/platform/android-sdk/build-tools/33.0.1/aidl
+          sudo chmod +x ~/.buildozer/android/platform/android-sdk/build-tools/33.0.1/aidl
+
+          # 3. 配置 cmdline-tools (sdkmanager)，直接複製系統現有的
+          sudo cp -r /usr/local/lib/android/sdk/cmdline-tools/latest/* ~/.buildozer/android/platform/android-sdk/cmdline-tools/latest/
           
-          # 2. 直接把 GitHub 系統現成可運行的 aidl 複製進去覆蓋，讓它不用去別的地方抓
-          if [ -d "$TARGET_DIR" ]; then
-            sudo cp /usr/local/lib/android/sdk/build-tools/33.0.1/aidl "$TARGET_DIR/aidl"
-            sudo chmod +x "$TARGET_DIR/aidl"
-            echo "Aidl successfully injected!"
-          else
-            echo "Warning: Target directory not found, fallback to multi-version linkage."
-            # 預防萬一，如果它還沒生出 build-tools，我們強制幫它建立多個版本的軟連結
-            for ver in 33.0.1 34.0.0 30.0.3; do
-              mkdir -p ~/.buildozer/android/platform/android-sdk/build-tools/$ver/
-              sudo ln -s /usr/local/lib/android/sdk/build-tools/33.0.1/aidl ~/.buildozer/android/platform/android-sdk/build-tools/$ver/aidl || true
-            done
-          fi
+          # 4. 建立舊路徑相容捷徑，不管 Buildozer 用新路徑還是舊路徑找，都絕對打不倒我們
+          ln -s ~/.buildozer/android/platform/android-sdk/cmdline-tools/latest/bin/sdkmanager ~/.buildozer/android/platform/android-sdk/tools/bin/sdkmanager || true
 
-          # 3. 同步修正新版 sdkmanager 找不到的潛在問題
-          mkdir -p ~/.buildozer/android/platform/android-sdk/tools/bin/
-          # 尋找 Buildozer 真正下載的 sdkmanager，拉一個捷徑給它舊路徑
-          REAL_SDKMANAGER=$(find ~/.buildozer/android/platform/ -name "sdkmanager" | head -n 1)
-          if [ ! -z "$REAL_SDKMANAGER" ]; then
-            ln -s "$REAL_SDKMANAGER" ~/.buildozer/android/platform/android-sdk/tools/bin/sdkmanager || true
-          fi
+          echo "Android 環境硬核配置完成！"
 
       # ==========================================================
-      # 第二階段：原地復活，重啟編譯（這一次它絕對能找到 aidl 了）
+      # 直接啟動編譯（由於環境全手動鋪好了，Buildozer 沒理由再報錯）
       # ==========================================================
-      - name: Resume Build with Buildozer
+      - name: Build with Buildozer
         run: |
           buildozer -v android debug
 
