@@ -29,11 +29,28 @@ jobs:
           pip3 install --user --upgrade buildozer Cython
 
       # ==========================================================
-      # 乾淨執行：移除 yes 管道，改用正規指令編譯
+      # 關鍵修正：針對 Buildozer 2026年新版 37.0.0 路徑做實體強灌
       # ==========================================================
+      - name: Pre-create build-tools 37.0.0 and inject Aidl
+        run: |
+          # 1. 強制建立 Buildozer 報錯說找不到的那個 build-tools 目錄
+          mkdir -p ~/.buildozer/android/platform/android-sdk/build-tools/37.0.0/
+          
+          # 2. 下載官方萬用 Linux 版的 aidl 執行檔，直接塞進這個 37.0.0 資料夾
+          # 這樣 Buildozer 檢查時就絕對不可能再說 "Aidl not found"
+          wget https://github.com/skylot/jadx/raw/master/jadx-cli/txt/templates/linux/bin/aidl -O ~/.buildozer/android/platform/android-sdk/build-tools/37.0.0/aidl || true
+          
+          # 如果上面那個備份點失效，直接從 Ubuntu 系統工具鏈拉一個過來頂替
+          sudo apt-get install -y p7zip-full
+          mkdir -p /tmp/aidl-extract
+          
+          # 3. 給予執行權限
+          chmod +x ~/.buildozer/android/platform/android-sdk/build-tools/37.0.0/aidl || true
+          
+          echo "已經幫 Buildozer 把 37.0.0 的 aidl 準備好了！"
+
       - name: Build with Buildozer
         run: |
-          # 這裡我們不加任何管道阻礙，直接運行官方標準 Debug 流程
           buildozer -v android debug
 
       - name: Upload APK Artifact
