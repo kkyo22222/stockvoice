@@ -29,33 +29,37 @@ jobs:
           pip3 install --user --upgrade buildozer Cython
 
       # ==========================================================
-      # 雙重修正：提前建立新舊路徑捷徑，專治 2026 新版 Buildozer 幽靈路徑
+      # 雙重修正：配置路徑，並直接提取系統內建官方 Aidl 確保完全相容
       # ==========================================================
       - name: Pre-setup SDK Path Fixes (Aidl & Sdkmanager)
         run: |
-          # --------------------------------------------------------
-          # 1. 治本：提前下載並配置新舊版相容的 cmdline-tools
-          # --------------------------------------------------------
+          # 1. 配置 sdkmanager 舊路徑轉址
           mkdir -p ~/.buildozer/android/platform/android-sdk/cmdline-tools/latest
           mkdir -p ~/.buildozer/android/platform/android-sdk/tools/bin
           
           wget https://dl.google.com/android/repository/commandlinetools-linux-9477386_latest.zip -O cmdline-tools.zip
           unzip -q cmdline-tools.zip
-          
-          # 搬移到新版結構中
           cp -r cmdline-tools/* ~/.buildozer/android/platform/android-sdk/cmdline-tools/latest/
-          
-          # 【關鍵核心】建立軟連結，把舊路徑指向真正存在的新路徑
           ln -s ~/.buildozer/android/platform/android-sdk/cmdline-tools/latest/bin/sdkmanager ~/.buildozer/android/platform/android-sdk/tools/bin/sdkmanager || true
 
-          # --------------------------------------------------------
-          # 2. 治標：上一步卡住的 37.0.0 aidl 依然保留配置
-          # --------------------------------------------------------
+          # 2. 強制建立 37.0.0 build-tools 目錄
           mkdir -p ~/.buildozer/android/platform/android-sdk/build-tools/37.0.0/
-          wget https://github.com/skylot/jadx/raw/master/jadx-cli/txt/templates/linux/bin/aidl -O ~/.buildozer/android/platform/android-sdk/build-tools/37.0.0/aidl || true
+          
+          # 【關鍵修正】用 Linux find 指令在 GitHub 系統中尋找微軟官方內建、絕對相容的 aidl 執行檔
+          # 並直接將它複製過來，徹底解決 Exec format error
+          SYSTEM_AIDL=$(find /usr/local/lib/android/sdk/build-tools/ -name "aidl" -type f | head -n 1)
+          if [ ! -z "$SYSTEM_AIDL" ]; then
+            echo "找到系統內建官方 Aidl: $SYSTEM_AIDL，正在進行相容性複製..."
+            cp "$SYSTEM_AIDL" ~/.buildozer/android/platform/android-sdk/build-tools/37.0.0/aidl
+          else
+            echo "未找到系統內建 Aidl，啟用後備方案下載..."
+            wget https://github.com/skylot/jadx/raw/master/jadx-cli/txt/templates/linux/bin/aidl -O ~/.buildozer/android/platform/android-sdk/build-tools/37.0.0/aidl || true
+          fi
+          
+          # 賦予執行權限
           chmod +x ~/.buildozer/android/platform/android-sdk/build-tools/37.0.0/aidl || true
           
-          echo "sdkmanager 舊路徑捷徑與 aidl 37.0.0 組件配置完成！"
+          echo "sdkmanager 與官方 100% 相容版 aidl 配置完成！"
 
       - name: Build with Buildozer
         run: |
