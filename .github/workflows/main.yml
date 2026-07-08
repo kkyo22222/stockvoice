@@ -11,46 +11,33 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v3
 
+      # 確保使用 Java 17，這是新版 Android SDK 編譯必備的環境
+      - name: Set up JDK 17
+        uses: actions/setup-java@v3
+        with:
+          distribution: 'temurin'
+          java-version: '17'
+
       - name: Set up Python
         uses: actions/setup-python@v4
         with:
           python-version: '3.10'
 
+      # 安裝最新版 Buildozer 與依賴套件
       - name: Install Buildozer dependencies
         run: |
           sudo apt update
-          sudo apt install -y git zip unzip openjdk-17-jdk python3-pip autoconf libtool pkg-config zlib1g-dev libncurses5-dev libgdbm-dev libnss3-dev libssl-dev libreadline-dev libffi-dev uuid-dev
-          pip3 install --user buildozer
+          sudo apt install -y git zip unzip python3-pip autoconf libtool pkg-config zlib1g-dev libncurses5-dev libgdbm-dev libnss3-dev libssl-dev libreadline-dev libffi-dev uuid-dev
+          # 強制安裝與更新到最新版 buildozer
+          pip3 install --user --upgrade buildozer Cython
 
       # ==========================================================
-      # 終極大絕：直接在環境變數與沙盒中寫死所有 Android SDK 工具鏈
-      # ==========================================================
-      - name: Setup Complete Android Environment for Buildozer
-        run: |
-          # 1. 建立 Buildozer 預期的所有核心目錄
-          mkdir -p ~/.buildozer/android/platform/android-sdk/cmdline-tools/latest/bin
-          mkdir -p ~/.buildozer/android/platform/android-sdk/tools/bin
-          mkdir -p ~/.buildozer/android/platform/android-sdk/build-tools/33.0.1/
-
-          # 2. 直接拿 GitHub 系統現成、完全正常的 Android SDK 工具進行強力覆蓋
-          # 這能保證 aidl 和 sdkmanager 絕對存在且可執行
-          sudo cp /usr/local/lib/android/sdk/build-tools/33.0.1/aidl ~/.buildozer/android/platform/android-sdk/build-tools/33.0.1/aidl
-          sudo chmod +x ~/.buildozer/android/platform/android-sdk/build-tools/33.0.1/aidl
-
-          # 3. 配置 cmdline-tools (sdkmanager)，直接複製系統現有的
-          sudo cp -r /usr/local/lib/android/sdk/cmdline-tools/latest/* ~/.buildozer/android/platform/android-sdk/cmdline-tools/latest/
-          
-          # 4. 建立舊路徑相容捷徑，不管 Buildozer 用新路徑還是舊路徑找，都絕對打不倒我們
-          ln -s ~/.buildozer/android/platform/android-sdk/cmdline-tools/latest/bin/sdkmanager ~/.buildozer/android/platform/android-sdk/tools/bin/sdkmanager || true
-
-          echo "Android 環境硬核配置完成！"
-
-      # ==========================================================
-      # 直接啟動編譯（由於環境全手動鋪好了，Buildozer 沒理由再報錯）
+      # 執行編譯（使用 yes 指令自動接受所有 Android SDK 的授權合約）
       # ==========================================================
       - name: Build with Buildozer
         run: |
-          buildozer -v android debug
+          # yes y 可以自動應答所有 Android 官方元件下載時的 "Do you accept the license? (y/N)"
+          yes y | buildozer -v android debug
 
       - name: Upload APK Artifact
         uses: actions/upload-artifact@v4
