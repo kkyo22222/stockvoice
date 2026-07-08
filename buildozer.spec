@@ -5,7 +5,7 @@ package.domain = com.yourname
 source.dir = .
 source.include_exts = py,png,jpg,kv,atlas,ttc,ttf
 version = 0.1
-requirements = python3,kivy,requests,charset-normalizer,idna,urllib3,certifi,beautifulsoup4,soupsieve
+requirements = python3,kivy,requests,beautifulsoup4
 orientation = portrait
 fullscreen = 0
 
