@@ -13,9 +13,9 @@ fullscreen = 0
 android.permissions = INTERNET
 
 # Android API 版本設定
-android.api = 33
+android.api = 31
 android.minapi = 21
-android.ndk = 25b
+android.ndk = 23b
 
 [buildozer]
 log_level = 2
