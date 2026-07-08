@@ -1,7 +1,7 @@
 name: Build Android APK with Buildozer
 
 on:
-  workflow_dispatch: # 讓你可以手動點擊按鈕來啟動打包
+  workflow_dispatch: # 手動觸發
 
 jobs:
   build:
@@ -22,9 +22,17 @@ jobs:
           sudo apt install -y git zip unzip openjdk-17-jdk python3-pip autoconf libtool pkg-config zlib1g-dev libncurses5-dev libgdbm-dev libnss3-dev libssl-dev libreadline-dev libffi-dev uuid-dev
           pip3 install --user buildozer
 
+      # ==========================================================
+      # 關鍵修正：手動修正 Android SDK 的 aidl 找不到的 Bug
+      # ==========================================================
+      - name: Fix aidl path bug
+        run: |
+          mkdir -p ~/.buildozer/android/platform/android-sdk/build-tools/33.0.1/
+          # 預先在 Buildozer 預期的地方建立軟連結，引導它找到系統的 aidl
+          sudo ln -s /usr/local/lib/android/sdk/build-tools/33.0.1/aidl ~/.buildozer/android/platform/android-sdk/build-tools/33.0.1/aidl || true
+
       - name: Build with Buildozer
         run: |
-          # 執行打包指令
           buildozer -v android debug
 
       - name: Upload APK Artifact
