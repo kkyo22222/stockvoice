@@ -29,34 +29,36 @@ jobs:
           pip3 install --user --upgrade buildozer Cython
 
       # ==========================================================
-      # 原始碼手術：直接修改 Buildozer 內部死板的路徑檢查邏輯
+      # 終極權限防禦：強行塞入 sdkmanager 檔案並「鎖死唯讀」
       # ==========================================================
-      - name: Patch Buildozer Source Code
+      - name: Inoculate and Lock SDK Path
         run: |
-          # 1. 找到系統中 buildozer 的安裝路徑 (例如在 .local/lib/python3.10/site-packages/)
-          TARGET_PY=$(python3 -c "import buildozer.targets.android as a; print(a.__file__)")
-          echo "Target Python file is: $TARGET_PY"
-          
-          # 2. 用 sed 強行修改源碼：
-          # 讓它的 _check_aidl() 永遠返回 True (不拋出 OSError 格式錯誤)
-          # 讓它的 sdkmanager 檢查永遠判定為存在，不要中斷退出
-          sed -i 's/returncode == 0/True/g' "$TARGET_PY" || true
-          sed -i 's/raise BuildozerCommandException/print/g' "$TARGET_PY" || true
-          sed -i 's/sys.exit(1)/pass/g' "$TARGET_PY" || true
-          
-          # 3. 預先幫它把萬能授權簽名章寫好
+          # 1. 強制預先建立 Buildozer 報錯的那串老舊路徑
+          mkdir -p ~/.buildozer/android/platform/android-sdk/tools/bin
           mkdir -p ~/.buildozer/android/platform/android-sdk/licenses
+          
+          # 2. 直接拿 GitHub 系統內建 100% 完整無缺的官方 sdkmanager（包含它周邊的 Java 類別庫）
+          # 我們把整個 cmdline-tools 實體覆蓋到舊路徑 tools 裡
+          sudo cp -r /usr/local/lib/android/sdk/cmdline-tools/latest/* ~/.buildozer/android/platform/android-sdk/tools/
+          
+          # 3. 寫入萬能授權簽名章
           echo -e "\n8933bad161af4178b1185d1a37fbf41ea5269c55\nd56f5187479451eabf01fb7431302450f3544353\n24333f1a63b6825ea9c5514f83c2829b004d1fee" > ~/.buildozer/android/platform/android-sdk/licenses/android-sdk-license
           
-          echo "Buildozer 原始碼手術完成！"
+          # 4. 【核心大絕】將這個檔案與資料夾全部鎖死為「唯讀」
+          # 這樣 Buildozer 稍後執行時，如果企圖刪除或重置它，Linux 系統會直接駁回刪除請求！
+          chmod 444 ~/.buildozer/android/platform/android-sdk/tools/bin/sdkmanager
+          chmod 555 ~/.buildozer/android/platform/android-sdk/tools/bin
+          chmod 555 ~/.buildozer/android/platform/android-sdk/tools
+          
+          echo "防禦性 sdkmanager 鎖定完成！"
 
       # ==========================================================
-      # 執行編譯（此時檢查邏輯已被完全閹割，必將一路往下走）
+      # 啟動最終編譯
       # ==========================================================
       - name: Build with Buildozer
         run: |
-          # 掛上 yes y 預防萬一
-          yes y | buildozer -v android debug
+          # 這裡不加 yes 管道，直接讓它順暢跑
+          buildozer -v android debug
 
       - name: Upload APK Artifact
         uses: actions/upload-artifact@v4
