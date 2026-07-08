@@ -11,7 +11,7 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v3
 
-      - name: Set up JDK 11  # 配合 API 31，使用最穩定的 JDK 11
+      - name: Set up JDK 11
         uses: actions/setup-java@v3
         with:
           distribution: 'temurin'
@@ -29,27 +29,36 @@ jobs:
           pip3 install --user --upgrade buildozer Cython
 
       # ==========================================================
-      # 終極大絕：多指令並行串聯 (Multi-command chain)
+      # 最終關鍵：利用系統內建的 sdkmanager 預先同意所有 Android 官方授權
+      # ==========================================================
+      - name: Auto Accept Android Licenses
+        run: |
+          # 使用 yes 指令，把 y 灌進 sdkmanager 裡，提前把所有的合約都簽好
+          if [ -d "/usr/local/lib/android/sdk/cmdline-tools/latest/bin" ]; then
+            yes | /usr/local/lib/android/sdk/cmdline-tools/latest/bin/sdkmanager --licenses || true
+          fi
+
+      # ==========================================================
+      # 強制編譯與轉址鏈
       # ==========================================================
       - name: Force Build Android APK
         run: |
-          # 1. 先讓 buildozer 跑起來，自動建立起底層的目錄結構
+          # 1. 讓 buildozer 跑起來，建立目錄
           buildozer android logcat || true
           buildozer -v android debug || true
           
-          # 2. 不管它有沒有失敗，此時底層目錄一定生出來了。我們立刻暴力強植「所有可能」的舊路徑轉址
+          # 2. 強植舊路徑轉址
           mkdir -p ~/.buildozer/android/platform/android-sdk/tools/bin/
           mkdir -p ~/.buildozer/android/platform/android-sdk/cmdline-tools/latest/bin/
           
-          # 3. 從微軟系統直接拔現成的 sdkmanager 塞滿這兩個地方
           sudo cp /usr/local/lib/android/sdk/cmdline-tools/latest/bin/sdkmanager ~/.buildozer/android/platform/android-sdk/tools/bin/sdkmanager || true
           sudo cp /usr/local/lib/android/sdk/cmdline-tools/latest/bin/sdkmanager ~/.buildozer/android/platform/android-sdk/cmdline-tools/latest/bin/sdkmanager || true
           sudo chmod +x ~/.buildozer/android/platform/android-sdk/tools/bin/sdkmanager || true
           
-          # 4. 原地復活，直接啟動最終編譯
-          echo "【系統防禦突破】重啟最終編譯..."
-          buildozer -v android debug
-
+          # 3. 在執行最終編譯時，同樣掛上 yes 應答機制確保萬無一失
+          echo "【授權已簽署】重啟最終編譯..."
+          yes | buildozer -v android debug
+          
       - name: Upload APK Artifact
         uses: actions/upload-artifact@v4
         with:
