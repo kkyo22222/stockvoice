@@ -29,35 +29,35 @@ jobs:
           pip3 install --user --upgrade buildozer Cython
 
       # ==========================================================
-      # 終極權限防禦：強行塞入 sdkmanager 檔案並「鎖死唯讀」
+      # 正規優雅流：我們手動在外面幫它蓋一棟完全合規的 Android 基地
       # ==========================================================
-      - name: Inoculate and Lock SDK Path
+      - name: Setup Custom Android SDK Environment
         run: |
-          # 1. 強制預先建立 Buildozer 報錯的那串老舊路徑
-          mkdir -p ~/.buildozer/android/platform/android-sdk/tools/bin
-          mkdir -p ~/.buildozer/android/platform/android-sdk/licenses
+          # 1. 在家目錄建立一個完全獨立、不受 Buildozer 控制的乾淨 SDK 資料夾
+          mkdir -p ~/android-sdk/cmdline-tools/latest
+          mkdir -p ~/android-sdk/licenses
           
-          # 2. 直接拿 GitHub 系統內建 100% 完整無缺的官方 sdkmanager（包含它周邊的 Java 類別庫）
-          # 我們把整個 cmdline-tools 實體覆蓋到舊路徑 tools 裡
-          sudo cp -r /usr/local/lib/android/sdk/cmdline-tools/latest/* ~/.buildozer/android/platform/android-sdk/tools/
+          # 2. 下載官方標準的 cmdline-tools
+          wget https://dl.google.com/android/repository/commandlinetools-linux-9477386_latest.zip -O cmdline-tools.zip
+          unzip -q cmdline-tools.zip
+          cp -r cmdline-tools/* ~/android-sdk/cmdline-tools/latest/
           
-          # 3. 寫入萬能授權簽名章
-          echo -e "\n8933bad161af4178b1185d1a37fbf41ea5269c55\nd56f5187479451eabf01fb7431302450f3544353\n24333f1a63b6825ea9c5514f83c2829b004d1fee" > ~/.buildozer/android/platform/android-sdk/licenses/android-sdk-license
+          # 3. 預先同意所有的合約 (用這棟獨立基地的 sdkmanager)
+          yes | ~/android-sdk/cmdline-tools/latest/bin/sdkmanager --licenses || true
           
-          # 4. 【核心大絕】將這個檔案與資料夾全部鎖死為「唯讀」
-          # 這樣 Buildozer 稍後執行時，如果企圖刪除或重置它，Linux 系統會直接駁回刪除請求！
-          chmod 444 ~/.buildozer/android/platform/android-sdk/tools/bin/sdkmanager
-          chmod 555 ~/.buildozer/android/platform/android-sdk/tools/bin
-          chmod 555 ~/.buildozer/android/platform/android-sdk/tools
+          # 4. 乾淨把 NDK 解壓到我們指定的獨立基地
+          mkdir -p ~/android-sdk/ndk
+          wget https://dl.google.com/android/repository/android-ndk-r25b-linux.zip -O ndk.zip
+          unzip -q ndk.zip
+          mv android-ndk-r25b ~/android-sdk/ndk/25b
           
-          echo "防禦性 sdkmanager 鎖定完成！"
+          echo "優雅的自訂 Android SDK/NDK 環境配置完成！"
 
       # ==========================================================
-      # 啟動最終編譯
+      # 執行編譯（此時 Buildozer 會乖乖讀取 spec 裡指定的自訂路徑）
       # ==========================================================
       - name: Build with Buildozer
         run: |
-          # 這裡不加 yes 管道，直接讓它順暢跑
           buildozer -v android debug
 
       - name: Upload APK Artifact
